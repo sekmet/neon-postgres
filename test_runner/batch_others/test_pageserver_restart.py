@@ -7,8 +7,7 @@ from fixtures.log_helper import log
 
 # Test restarting page server, while safekeeper and compute node keep
 # running.
-@pytest.mark.timeout(450)
-def test_pageserver_restart(env_env_builder: NeonEnvBuilder):
+def test_pageserver_restart(neon_env_builder: NeonEnvBuilder):
     env = neon_env_builder.init_start()
 
     env.neon_cli.create_branch('test_pageserver_restart')
@@ -59,6 +58,7 @@ def test_pageserver_restart(env_env_builder: NeonEnvBuilder):
 
 # Test that repeatedly kills and restarts the page server, while the
 # safekeeper and compute node keep running.
+@pytest.mark.timeout(540)
 def test_pageserver_chaos(neon_env_builder: NeonEnvBuilder):
     env = neon_env_builder.init_start()
 
@@ -95,7 +95,7 @@ def test_pageserver_chaos(neon_env_builder: NeonEnvBuilder):
             assert int(row[0]) < int(row[1])
 
     # Update the whole table, then immediately kill and restart the pageserver
-    for i in range(1, 20):
+    for i in range(1, 15):
         pg.safe_psql('UPDATE foo set updates = updates + 1')
 
         # This kills the pageserver immediately, to simulate a crash
