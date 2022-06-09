@@ -123,16 +123,15 @@ def test_pgbench_simple_update_workload(pg_compare: PgCompare, scale: int, trans
 
 def start_pgbench_intensive_initialization(env: PgCompare, scale: int):
     with env.record_duration("run_duration"):
-        # Needs to increase the statement timeout from 120s to 300s because the initialization step can be
-        # slow with a large scale.
+        # Needs to increase the statement timeout (default: 120s) because the
+        # initialization step can be slow with a large scale.
         env.pg_bin.run_capture([
             'pgbench',
             f'-s{scale}',
             '-i',
             '-Idtg',
-            env.pg.connstr(options='-cstatement_timeout=300s')
+            env.pg.connstr(options='-cstatement_timeout=180s')
         ])
-        env.flush()
 
 
 @pytest.mark.parametrize("scale", get_scales_matrix(1000))
