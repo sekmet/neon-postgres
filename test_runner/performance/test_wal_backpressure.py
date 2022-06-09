@@ -126,7 +126,11 @@ def start_pgbench_intensive_initialization(env: PgCompare, scale: int):
         # Needs to increase the statement timeout from 120s to 300s because the initialization step can be
         # slow with a large scale.
         env.pg_bin.run_capture([
-            'pgbench', f'-s{scale}', '-i', '-n', env.pg.connstr(options='-cstatement_timeout=300s')
+            'pgbench',
+            f'-s{scale}',
+            '-i',
+            '-Idtg',
+            env.pg.connstr(options='-cstatement_timeout=300s')
         ])
         env.flush()
 
