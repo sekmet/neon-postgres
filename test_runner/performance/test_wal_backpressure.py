@@ -221,13 +221,12 @@ def record_read_latency(env: PgCompare,
                         read_interval: float = 1.0):
     read_latencies = []
     while run_cond():
+        t = timeit.default_timer()
         with pg_cur(env.pg) as cur:
-            t = timeit.default_timer()
             cur.execute(read_query)
+
             duration = timeit.default_timer() - t
-
             log.info(f"Executed read query {read_query}, got {cur.fetchall()}, took {duration}")
-
             read_latencies.append(duration)
 
         time.sleep(read_interval)
