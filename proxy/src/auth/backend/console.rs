@@ -204,6 +204,13 @@ mod tests {
     use serde_json::json;
 
     #[test]
+    fn test_parse_host_port() {
+        let (host, port) = parse_host_port("127.0.0.1:5432").expect("failed to parse");
+        assert_eq!(host, "127.0.0.1");
+        assert_eq!(port, 5432);
+    }
+
+    #[test]
     fn parse_db_info() -> anyhow::Result<()> {
         let _: DatabaseInfo = serde_json::from_value(json!({
             "host": "localhost",

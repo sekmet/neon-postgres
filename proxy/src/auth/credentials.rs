@@ -120,3 +120,47 @@ impl ClientCredentials {
         super::backend::handle_user(config, client, self).await
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_creds_project_name() {
+        fn make_creds(sni_data: Option<&str>, project_name: Option<&str>) -> ClientCredentials {
+            ClientCredentials {
+                user: "john_doe".to_owned(),
+                dbname: "earth".to_owned(),
+                sni_data: sni_data.map(|s| s.to_owned()),
+                project_name: project_name.map(|s| s.to_owned()),
+            }
+        }
+
+        let creds = make_creds(None, None);
+        assert!(matches!(
+            creds.project_name(),
+            Err(ProjectNameError::Missing)
+        ));
+
+        let creds = make_creds(Some(""), None);
+        assert!(matches!(creds.project_name(), Err(ProjectNameError::Bad)));
+
+        let creds = make_creds(Some("foo.bar"), None);
+        assert!(matches!(creds.project_name(), Ok("foo")));
+
+        let creds = make_creds(Some(""), Some("test"));
+        assert!(matches!(creds.project_name(), Err(ProjectNameError::Bad)));
+
+        let creds = make_creds(Some("foo.bar"), Some("foo"));
+        assert!(matches!(creds.project_name(), Ok("foo")));
+
+        let creds = make_creds(Some("foo.bar"), Some("baz"));
+        assert!(matches!(
+            creds.project_name(),
+            Err(ProjectNameError::Inconsistent(_, _))
+        ));
+
+        let creds = make_creds(None, Some("project"));
+        assert!(matches!(creds.project_name(), Ok("project")));
+    }
+}
