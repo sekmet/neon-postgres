@@ -21,7 +21,7 @@ jobs:
     environment:
       BUILD_TYPE: << parameters.build_type >>
     steps:
-        # Checkout the git repo (circleci doesn't have a flag to enable submodules here)
+      # Checkout the git repo (circleci doesn't have a flag to enable submodules here)
       - checkout
 
         # Grab the postgres git revision to build a cache key.
@@ -30,8 +30,8 @@ jobs:
       - run:
           name: Get postgres cache key
           command: |
-              git rev-parse HEAD:vendor/postgres > /tmp/cache-key-postgres
-              cat Makefile >> /tmp/cache-key-postgres
+            git rev-parse HEAD:vendor/postgres > /tmp/cache-key-postgres
+            cat Makefile >> /tmp/cache-key-postgres
 
       - restore_cache:
           name: Restore postgres cache
@@ -68,7 +68,7 @@ jobs:
     environment:
       BUILD_TYPE: << parameters.build_type >>
     steps:
-        # Checkout the git repo (without submodules)
+      # Checkout the git repo (without submodules)
       - checkout
 
         # Grab the postgres git revision to build a cache key.
@@ -79,7 +79,6 @@ jobs:
           command: |
             git rev-parse HEAD:vendor/postgres > /tmp/cache-key-postgres
             cat Makefile >> /tmp/cache-key-postgres
-
 
       - restore_cache:
           name: Restore postgres cache
@@ -217,8 +216,8 @@ jobs:
           name: Print versions
           when: always
           command: |
-              poetry run python --version
-              poetry show
+            poetry run python --version
+            poetry show
       - run:
           name: Run yapf to ensure code format
           when: always
@@ -740,31 +739,14 @@ workflows:
           name: build-postgres-<< matrix.build_type >>
           matrix:
             parameters:
-              build_type: ["debug", "release"]
+              build_type: ["release"]
       - build-neon:
           name: build-neon-<< matrix.build_type >>
           matrix:
             parameters:
-              build_type: ["debug", "release"]
+              build_type: ["release"]
           requires:
             - build-postgres-<< matrix.build_type >>
-      - run-pytest:
-          name: pg_regress-tests-<< matrix.build_type >>
-          matrix:
-            parameters:
-              build_type: ["debug", "release"]
-          test_selection: batch_pg_regress
-          needs_postgres_source: true
-          requires:
-            - build-neon-<< matrix.build_type >>
-      - run-pytest:
-          name: other-tests-<< matrix.build_type >>
-          matrix:
-            parameters:
-              build_type: ["debug", "release"]
-          test_selection: batch_others
-          requires:
-            - build-neon-<< matrix.build_type >>
       - run-pytest:
           name: benchmarks
           context: PERF_TEST_RESULT_CONNSTR
@@ -774,120 +756,3 @@ workflows:
           save_perf_report: true
           requires:
             - build-neon-release
-      - coverage-report:
-          # Context passes credentials for gh api
-          context: CI_ACCESS_TOKEN
-          requires:
-            # TODO: consider adding more
-            - other-tests-debug
-      - docker-image:
-          # Context gives an ability to login
-          context: Docker Hub
-          # Build image only for commits to main
-          filters:
-            branches:
-              only:
-                - main
-          requires:
-            - pg_regress-tests-release
-            - other-tests-release
-      - docker-image-compute:
-          # Context gives an ability to login
-          context: Docker Hub
-          # Build image only for commits to main
-          filters:
-            branches:
-              only:
-                - main
-          requires:
-            - pg_regress-tests-release
-            - other-tests-release
-      - deploy-staging:
-          # Context gives an ability to login
-          context: Docker Hub
-          # deploy only for commits to main
-          filters:
-            branches:
-              only:
-                - main
-          requires:
-            - docker-image
-      - deploy-staging-proxy:
-          # deploy only for commits to main
-          filters:
-            branches:
-              only:
-                - main
-          requires:
-            - docker-image
-
-      - deploy-neon-stress:
-          # Context gives an ability to login
-          context: Docker Hub
-          # deploy only for commits to main
-          filters:
-            branches:
-              only:
-                - main
-          requires:
-            - docker-image
-      - deploy-neon-stress-proxy:
-          # deploy only for commits to main
-          filters:
-            branches:
-              only:
-                - main
-          requires:
-            - docker-image
-
-      - docker-image-release:
-          # Context gives an ability to login
-          context: Docker Hub
-          # Build image only for commits to main
-          filters:
-            branches:
-              only:
-                - release
-          requires:
-            - pg_regress-tests-release
-            - other-tests-release
-      - docker-image-compute-release:
-          # Context gives an ability to login
-          context: Docker Hub
-          # Build image only for commits to main
-          filters:
-            branches:
-              only:
-                - release
-          requires:
-            - pg_regress-tests-release
-            - other-tests-release
-      - deploy-release:
-          # Context gives an ability to login
-          context: Docker Hub
-          # deploy only for commits to main
-          filters:
-            branches:
-              only:
-                - release
-          requires:
-            - docker-image-release
-      - deploy-release-proxy:
-          # deploy only for commits to main
-          filters:
-            branches:
-              only:
-                - release
-          requires:
-            - docker-image-release
-      - remote-ci-trigger:
-          # Context passes credentials for gh api
-          context: CI_ACCESS_TOKEN
-          remote_repo: "neondatabase/cloud"
-          requires:
-            # XXX: Successful build doesn't mean everything is OK, but
-            # the job to be triggered takes so much time to complete (~22 min)
-            # that it's better not to wait for the commented-out steps
-            - build-neon-release
-            # - pg_regress-tests-release
-            # - other-tests-release
