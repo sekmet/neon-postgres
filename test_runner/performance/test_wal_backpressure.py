@@ -1,7 +1,6 @@
 #
 # Tests measure the WAL pressure's performance under different workloads.
 #
-import os
 import statistics
 import threading
 import time
@@ -15,17 +14,7 @@ from fixtures.compare_fixtures import NeonCompare, PgCompare, VanillaCompare
 from fixtures.log_helper import log
 from fixtures.neon_fixtures import DEFAULT_BRANCH_NAME, NeonEnvBuilder, PgBin
 
-from performance.test_perf_pgbench import get_scales_matrix
-
-
-def get_num_iters_matrix(default: int = 10):
-    scales = os.getenv("TEST_NUM_ITERS_MATRIX", default=str(default))
-    return list(map(int, scales.split(",")))
-
-
-def get_transactions_matrix(default: int = 1_000):
-    scales = os.getenv("TEST_TRANSACTIONS_MATRIX", default=str(default))
-    return list(map(int, scales.split(",")))
+from performance.test_perf_pgbench import (get_durations_matrix, get_scales_matrix)
 
 
 @pytest.fixture(
@@ -71,57 +60,80 @@ def pg_compare(request) -> PgCompare:
                            config_lines=[f"max_replication_write_lag={x[2]}"])
 
 
-def start_heavy_write_workload(env: PgCompare, scale: int, num_iters: int):
-    """Start an intensive write workload.
+def start_heavy_write_workload(env: PgCompare, n_tables: int, scale: int, num_iters: int):
+    """Start an intensive write workload across multiple tables.
+
+    ## Single table workload:
     At each step, insert new `new_rows_each_update` rows.
     The variable `new_rows_each_update` is equal to `scale * 100_000`.
     The number of steps is determined by `num_iters` variable."""
     new_rows_each_update = scale * 100_000
 
-    n_rows = 0
-    with env.record_duration("run_duration"):
+    def start_single_table_workload(table_id: int):
         for _ in range(num_iters):
             with pg_cur(env.pg) as cur:
                 cur.execute(
-                    f"INSERT INTO t SELECT s+{n_rows} FROM generate_series(1,{new_rows_each_update}) s"
+                    f"INSERT INTO t{table_id} SELECT FROM generate_series(1,{new_rows_each_update})"
                 )
-            n_rows += new_rows_each_update
+
+    with env.record_duration("run_duration"):
+        threads = [
+            threading.Thread(target=start_single_table_workload, args=(i, ))
+            for i in range(n_tables)
+        ]
+
+        for thread in threads:
+            thread.start()
+        for thread in threads:
+            thread.join()
 
 
-@pytest.mark.parametrize("scale", get_scales_matrix(5))
-@pytest.mark.parametrize("num_iters", get_num_iters_matrix())
-def test_heavy_write_workload(pg_compare: PgCompare, scale: int, num_iters: int):
+@pytest.mark.parametrize("n_tables", [10])
+@pytest.mark.parametrize("scale", [5])
+@pytest.mark.parametrize("num_iters", [10])
+def test_heavy_write_workload(pg_compare: PgCompare, n_tables: int, scale: int, num_iters: int):
     env = pg_compare
 
+    # Initializes test tables
     with pg_cur(env.pg) as cur:
-        cur.execute("CREATE TABLE t(key int primary key)")
+        for i in range(n_tables):
+            cur.execute(
+                f"CREATE TABLE t{i}(key serial primary key, t text default 'foooooooooooooooooooooooooooooooooooooooooooooooooooo')"
+            )
 
     workload_thread = threading.Thread(target=start_heavy_write_workload,
-                                       args=(env, scale, num_iters))
+                                       args=(env, n_tables, scale, num_iters))
     workload_thread.start()
 
     record_thread = threading.Thread(target=record_lsn_write_lag,
                                      args=(env, lambda: workload_thread.is_alive()))
     record_thread.start()
 
-    record_read_latency(env, lambda: workload_thread.is_alive(), "SELECT count(*) from t")
+    record_read_latency(env, lambda: workload_thread.is_alive(), "SELECT * from t0 where key = 1")
     workload_thread.join()
     record_thread.join()
 
 
-def start_pgbench_simple_update_workload(env: PgCompare, scale: int, transactions: int):
+def start_pgbench_simple_update_workload(env: PgCompare, scale: int, duration: int):
     with env.record_duration("run_duration"):
         env.pg_bin.run_capture(['pgbench', f'-s{scale}', '-i', '-Igvp', env.pg.connstr()])
         env.flush()
 
-        env.pg_bin.run_capture(
-            ['pgbench', '-N', f'-t{transactions}', '-Mprepared', env.pg.connstr()])
+        env.pg_bin.run_capture([
+            'pgbench',
+            '-j10',
+            '-c10',
+            '-N',
+            f'-T{duration}',
+            '-Mprepared',
+            env.pg.connstr(options="-csynchronous_commit=off")
+        ])
         env.flush()
 
 
 @pytest.mark.parametrize("scale", get_scales_matrix(50))
-@pytest.mark.parametrize("transactions", get_transactions_matrix())
-def test_pgbench_simple_update_workload(pg_compare: PgCompare, scale: int, transactions: int):
+@pytest.mark.parametrize("duration", get_durations_matrix())
+def test_pgbench_simple_update_workload(pg_compare: PgCompare, scale: int, duration: int):
     env = pg_compare
 
     # create pgbench tables
@@ -129,7 +141,7 @@ def test_pgbench_simple_update_workload(pg_compare: PgCompare, scale: int, trans
     env.flush()
 
     workload_thread = threading.Thread(target=start_pgbench_simple_update_workload,
-                                       args=(env, scale, transactions))
+                                       args=(env, scale, duration))
     workload_thread.start()
 
     record_thread = threading.Thread(target=record_lsn_write_lag,
@@ -138,7 +150,7 @@ def test_pgbench_simple_update_workload(pg_compare: PgCompare, scale: int, trans
 
     record_read_latency(env,
                         lambda: workload_thread.is_alive(),
-                        "SELECT sum(abalance) from pgbench_accounts")
+                        "SELECT * from pgbench_accounts where aid = 1")
     workload_thread.join()
     record_thread.join()
 
@@ -158,9 +170,6 @@ def start_pgbench_intensive_initialization(env: PgCompare, scale: int):
 
 @pytest.mark.parametrize("scale", get_scales_matrix(1000))
 def test_pgbench_intensive_init_workload(pg_compare: PgCompare, scale: int):
-    # This test tries to simulate a scenario when doing an intensive write on a table possibly
-    # blocks queries from another table, as described in https://github.com/neondatabase/neon/issues/1763.
-
     env = pg_compare
     with pg_cur(env.pg) as cur:
         cur.execute("CREATE TABLE foo as select generate_series(1,100000)")
@@ -221,13 +230,19 @@ def record_read_latency(env: PgCompare,
                         read_interval: float = 1.0):
     read_latencies = []
     while run_cond():
-        t = timeit.default_timer()
-        with pg_cur(env.pg) as cur:
-            cur.execute(read_query)
+        t0 = timeit.default_timer()
+        try:
+            with pg_cur(env.pg) as cur:
+                t1 = timeit.default_timer()
+                cur.execute(read_query)
+                t2 = timeit.default_timer()
 
-            duration = timeit.default_timer() - t
-            log.info(f"Executed read query {read_query}, got {cur.fetchall()}, took {duration}")
-            read_latencies.append(duration)
+                log.info(
+                    f"Executed read query {read_query}, got {cur.fetchall()}, connection time {t1-t0}, read time {t2-t1}"
+                )
+                read_latencies.append(t2 - t0)
+        except Exception as err:
+            log.error(f"Got error when executing the read query: {err}")
 
         time.sleep(read_interval)
 
