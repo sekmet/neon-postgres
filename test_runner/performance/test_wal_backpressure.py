@@ -88,7 +88,7 @@ def start_heavy_write_workload(env: PgCompare, n_tables: int, scale: int, num_it
             thread.join()
 
 
-@pytest.mark.parametrize("n_tables", [10])
+@pytest.mark.parametrize("n_tables", [5])
 @pytest.mark.parametrize("scale", [5])
 @pytest.mark.parametrize("num_iters", [10])
 def test_heavy_write_workload(pg_compare: PgCompare, n_tables: int, scale: int, num_iters: int):
@@ -131,7 +131,7 @@ def start_pgbench_simple_update_workload(env: PgCompare, scale: int, duration: i
         env.flush()
 
 
-@pytest.mark.parametrize("scale", get_scales_matrix(50))
+@pytest.mark.parametrize("scale", get_scales_matrix(100))
 @pytest.mark.parametrize("duration", get_durations_matrix())
 def test_pgbench_simple_update_workload(pg_compare: PgCompare, scale: int, duration: int):
     env = pg_compare
