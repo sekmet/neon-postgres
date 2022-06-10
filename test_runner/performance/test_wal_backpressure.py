@@ -164,7 +164,7 @@ def start_pgbench_intensive_initialization(env: PgCompare, scale: int):
             f'-s{scale}',
             '-i',
             '-Idtg',
-            env.pg.connstr(options='-cstatement_timeout=180s')
+            env.pg.connstr(options='-cstatement_timeout=300s')
         ])
 
 
