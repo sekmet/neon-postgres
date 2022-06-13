@@ -89,7 +89,7 @@ def start_heavy_write_workload(env: PgCompare, n_tables: int, scale: int, num_it
 
 
 @pytest.mark.parametrize("n_tables", [5])
-@pytest.mark.parametrize("scale", [5])
+@pytest.mark.parametrize("scale", get_scales_matrix(5))
 @pytest.mark.parametrize("num_iters", [10])
 def test_heavy_write_workload(pg_compare: PgCompare, n_tables: int, scale: int, num_iters: int):
     env = pg_compare
@@ -190,6 +190,8 @@ def record_lsn_write_lag(env: PgCompare, run_cond: Callable[[], bool], pool_inte
         return
 
     lsn_write_lags = []
+    last_received_lsn = 0
+    last_pg_flush_lsn = 0
 
     with pg_cur(env.pg) as cur:
         cur.execute("CREATE EXTENSION neon")
@@ -197,14 +199,26 @@ def record_lsn_write_lag(env: PgCompare, run_cond: Callable[[], bool], pool_inte
         while run_cond():
             cur.execute('''
             select pg_wal_lsn_diff(pg_current_wal_flush_lsn(),received_lsn),
-            pg_size_pretty(pg_wal_lsn_diff(pg_current_wal_flush_lsn(),received_lsn))
+            pg_size_pretty(pg_wal_lsn_diff(pg_current_wal_flush_lsn(),received_lsn)),
+            pg_current_wal_flush_lsn(),
+            received_lsn
             from backpressure_lsns();
             ''')
 
             res = cur.fetchone()
             lsn_write_lags.append(res[0])
 
-            log.info(f"received_lsn_lag = {res[1]}")
+            curr_received_lsn = lsn_from_hex(res[3])
+            lsn_process_speed = (curr_received_lsn - last_received_lsn) / (1024**2)
+            last_received_lsn = curr_received_lsn
+
+            curr_pg_flush_lsn = lsn_from_hex(res[2])
+            lsn_produce_speed = (curr_pg_flush_lsn - last_pg_flush_lsn) / (1024**2)
+            last_pg_flush_lsn = curr_pg_flush_lsn
+
+            log.info(
+                f"received_lsn_lag={res[1]}, pg_flush_lsn={res[2]}, received_lsn={res[3]}, lsn_process_speed={lsn_process_speed:.2f}MB/s, lsn_produce_speed={lsn_produce_speed:.2f}MB/s"
+            )
 
             time.sleep(pool_interval)
 
