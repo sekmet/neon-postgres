@@ -251,7 +251,7 @@ def record_read_latency(env: PgCompare,
                 t2 = timeit.default_timer()
 
                 log.info(
-                    f"Executed read query {read_query}, got {cur.fetchall()}, connection time {t1-t0}, read time {t2-t1}"
+                    f"Executed read query {read_query}, got {cur.fetchall()}, connection time {t1-t0:.2f}s, read time {t2-t1:.2f}s"
                 )
                 read_latencies.append(t2 - t0)
         except Exception as err:
