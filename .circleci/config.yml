@@ -751,8 +751,7 @@ workflows:
           name: benchmarks
           context: PERF_TEST_RESULT_CONNSTR
           build_type: release
-          test_selection: performance/test_wal_backpressure.py
-          run_in_parallel: false
+          test_selection: performance
           save_perf_report: true
           requires:
             - build-neon-release
