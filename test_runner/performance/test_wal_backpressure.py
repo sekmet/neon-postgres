@@ -116,9 +116,6 @@ def test_heavy_write_workload(pg_compare: PgCompare, n_tables: int, scale: int, 
 
 def start_pgbench_simple_update_workload(env: PgCompare, scale: int, duration: int):
     with env.record_duration("run_duration"):
-        env.pg_bin.run_capture(['pgbench', f'-s{scale}', '-i', '-Igvp', env.pg.connstr()])
-        env.flush()
-
         env.pg_bin.run_capture([
             'pgbench',
             '-j10',
@@ -136,8 +133,8 @@ def start_pgbench_simple_update_workload(env: PgCompare, scale: int, duration: i
 def test_pgbench_simple_update_workload(pg_compare: PgCompare, scale: int, duration: int):
     env = pg_compare
 
-    # create pgbench tables
-    env.pg_bin.run_capture(['pgbench', f'-s{scale}', '-i', '-Idt', env.pg.connstr()])
+    # initialize pgbench tables
+    env.pg_bin.run_capture(['pgbench', f'-s{scale}', '-i', env.pg.connstr()])
     env.flush()
 
     workload_thread = threading.Thread(target=start_pgbench_simple_update_workload,
