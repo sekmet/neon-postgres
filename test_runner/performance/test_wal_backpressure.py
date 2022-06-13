@@ -57,7 +57,7 @@ def pg_compare(request) -> PgCompare:
                            env,
                            pg_bin,
                            branch_name,
-                           config_lines=[f"max_replication_write_lag={x[2]}"])
+                           config_lines=[f"max_replication_write_lag={x[2]}", "wal_log_hints=off"])
 
 
 def start_heavy_write_workload(env: PgCompare, n_tables: int, scale: int, num_iters: int):
