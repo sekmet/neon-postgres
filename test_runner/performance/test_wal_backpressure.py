@@ -100,6 +100,7 @@ def test_heavy_write_workload(pg_compare: PgCompare, n_tables: int, scale: int, 
             cur.execute(
                 f"CREATE TABLE t{i}(key serial primary key, t text default 'foooooooooooooooooooooooooooooooooooooooooooooooooooo')"
             )
+            cur.execute(f"INSERT INTO t{i} (key) VALUES (0)")
 
     workload_thread = threading.Thread(target=start_heavy_write_workload,
                                        args=(env, n_tables, scale, num_iters))
@@ -109,7 +110,7 @@ def test_heavy_write_workload(pg_compare: PgCompare, n_tables: int, scale: int, 
                                      args=(env, lambda: workload_thread.is_alive()))
     record_thread.start()
 
-    record_read_latency(env, lambda: workload_thread.is_alive(), "SELECT * from t0 where key = 1")
+    record_read_latency(env, lambda: workload_thread.is_alive(), "SELECT * from t0 where key = 0")
     workload_thread.join()
     record_thread.join()
 
