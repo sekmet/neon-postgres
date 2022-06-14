@@ -18,12 +18,11 @@ from fixtures.utils import lsn_from_hex
 from performance.test_perf_pgbench import (get_durations_matrix, get_scales_matrix)
 
 
-@pytest.fixture(
-    params=["vanilla", "neon_off_15MB", "neon_off_500MB", "neon_on_15MB", "neon_on_500MB"])
+@pytest.fixture(params=["vanilla", "neon_off", "neon_on"])
 # This fixture constructs multiple `PgCompare` interfaces using a builder pattern.
 # The builder parameters are encoded in the fixture's param.
 # For example, to build a `NeonCompare` interface, the corresponding fixture's param should have
-# a format of `neon_{safekeepers_enable_fsync}_{max_replication_apply_lag}`.
+# a format of `neon_{safekeepers_enable_fsync}`.
 # Note that, here "_" is used to separate builder parameters.
 def pg_compare(request) -> PgCompare:
     x = request.param.split("_")
@@ -35,8 +34,8 @@ def pg_compare(request) -> PgCompare:
 
         return fixture
     else:
-        assert len(x) == 3, f"request param ({request.param}) should have a format of \
-        `neon_{{safekeepers_enable_fsync}}_{{max_replication_apply_lag}}`"
+        assert len(x) == 2, f"request param ({request.param}) should have a format of \
+        `neon_{{safekeepers_enable_fsync}}`"
 
         # `NeonCompare` interface
         neon_env_builder = request.getfixturevalue("neon_env_builder")
@@ -58,7 +57,7 @@ def pg_compare(request) -> PgCompare:
                            env,
                            pg_bin,
                            branch_name,
-                           config_lines=[f"max_replication_write_lag={x[2]}", "wal_log_hints=off"])
+                           config_lines=["wal_log_hints=off"])
 
 
 def start_heavy_write_workload(env: PgCompare, n_tables: int, scale: int, num_iters: int):
