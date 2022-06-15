@@ -241,22 +241,22 @@ def record_read_latency(env: PgCompare,
                         read_query: str,
                         read_interval: float = 1.0):
     read_latencies = []
-    while run_cond():
-        t0 = timeit.default_timer()
-        try:
-            with pg_cur(env.pg) as cur:
+
+    with pg_cur(env.pg) as cur:
+        while run_cond():
+            try:
                 t1 = timeit.default_timer()
                 cur.execute(read_query)
                 t2 = timeit.default_timer()
 
                 log.info(
-                    f"Executed read query {read_query}, got {cur.fetchall()}, connection time {t1-t0:.2f}s, read time {t2-t1:.2f}s"
+                    f"Executed read query {read_query}, got {cur.fetchall()}, read time {t2-t1:.2f}s"
                 )
-                read_latencies.append(t2 - t0)
-        except Exception as err:
-            log.error(f"Got error when executing the read query: {err}")
+                read_latencies.append(t2 - t1)
+            except Exception as err:
+                log.error(f"Got error when executing the read query: {err}")
 
-        time.sleep(read_interval)
+            time.sleep(read_interval)
 
     env.zenbenchmark.record("read_latency_max",
                             max(read_latencies),
